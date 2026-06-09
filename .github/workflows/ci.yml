@@ -1,0 +1,140 @@
+---
+name: CI
+
+"on":
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-pins:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        version:
+          - "24"
+          - "25"
+          - "26"
+    runs-on: ${{ matrix.os }}
+    name: runner / install ${{ matrix.os }} v${{ matrix.version }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Install Cinc Workstation
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+
+      - name: Verify chef command is available
+        shell: bash
+        run: chef --version
+
+  test-default:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    name: runner / install ${{ matrix.os }} default
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Install Cinc Workstation
+        uses: ./
+
+      - name: Verify chef command is available
+        shell: bash
+        run: chef --version
+
+  check-markdown:
+    runs-on: ubuntu-latest
+    name: runner / markdownlint
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Run Markdown Lint
+        uses: DavidAnson/markdownlint-cli2-action@v23
+        with:
+          globs: "**/*.md"
+
+  check-yaml:
+    runs-on: ubuntu-latest
+    name: runner / yamllint
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Run YAML Lint
+        uses: actionshub/yamllint@main
+
+  check-workflows:
+    runs-on: ubuntu-latest
+    name: runner / actionlint
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Run actionlint
+        uses: raven-actions/actionlint@v2
+
+  check-commits:
+    runs-on: ubuntu-latest
+    name: runner / cocogitto
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Check conventional commits
+        uses: cocogitto/cocogitto-action@v4.1.0
+        with:
+          command: check
+          args: --from-latest-tag
+
+  final:
+    runs-on: ubuntu-latest
+    name: final
+    needs:
+      - test-pins
+      - test-default
+      - check-markdown
+      - check-yaml
+      - check-workflows
+      - check-commits
+    if: always()
+    steps:
+      - name: Check results
+        shell: bash
+        run: |
+          declare -A results=(
+            [test-pins]="${{ needs.test-pins.result }}"
+            [test-default]="${{ needs.test-default.result }}"
+            [check-markdown]="${{ needs.check-markdown.result }}"
+            [check-yaml]="${{ needs.check-yaml.result }}"
+            [check-workflows]="${{ needs.check-workflows.result }}"
+            [check-commits]="${{ needs.check-commits.result }}"
+          )
+          failed=0
+          for job in "${!results[@]}"; do
+            result="${results[$job]}"
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "::error::$job: $result"
+              failed=1
+            else
+              echo "$job: $result"
+            fi
+          done
+          exit "$failed"

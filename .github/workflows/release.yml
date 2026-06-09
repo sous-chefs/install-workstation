@@ -1,0 +1,44 @@
+---
+name: Release
+
+"on":
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PORTER_GITHUB_TOKEN || github.token }}
+
+      - name: Release with Cocogitto
+        id: release
+        uses: cocogitto/cocogitto-action@v4.1.0
+        with:
+          command: bump
+          args: --auto
+          git-user: Sous Chefs Bot
+          git-user-email: help@sous-chefs.org
+
+      - name: Generate GitHub release notes
+        id: changelog
+        uses: cocogitto/cocogitto-action@v4.1.0
+        with:
+          command: changelog
+          args: --at ${{ steps.release.outputs.version }}
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.PORTER_GITHUB_TOKEN || github.token }}
+        with:
+          body: ${{ steps.changelog.outputs.stdout }}
+          tag_name: ${{ steps.release.outputs.version }}
