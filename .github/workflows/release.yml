@@ -21,7 +21,7 @@ jobs:
 
       - name: Release with Cocogitto
         id: release
-        uses: cocogitto/cocogitto-action@v4.1.0
+        uses: cocogitto/cocogitto-action@v4.2.0
         with:
           command: bump
           args: --auto
@@ -30,7 +30,7 @@ jobs:
 
       - name: Generate GitHub release notes
         id: changelog
-        uses: cocogitto/cocogitto-action@v4.1.0
+        uses: cocogitto/cocogitto-action@v4.2.0
         with:
           command: changelog
           args: --at ${{ steps.release.outputs.version }}
